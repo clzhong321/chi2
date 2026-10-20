@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>寻宝游戏 · JavaScript 异步动画演示</title>
+    <style>
+      :root {
+        --bg: #070b16;
+        --bg2: #0d1424;
+        --panel: rgba(18, 26, 45, 0.72);
+        --border: rgba(120, 150, 210, 0.16);
+        --gold: #f6c65b;
+        --gold-soft: rgba(246, 198, 91, 0.14);
+        --green: #3ddc97;
+        --red: #ff6b6b;
+        --text: #e9eefb;
+        --muted: #8b9ab8;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        background: radial-gradient(1200px 700px at 15% -10%, #16213d 0%, transparent 60%),
+          radial-gradient(900px 600px at 95% 110%, #121a30 0%, transparent 55%),
+          linear-gradient(160deg, var(--bg) 0%, var(--bg2) 100%);
+        color: var(--text);
+        font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+        min-height: 100%;
+        overflow-x: hidden;
+        position: relative;
+      }
+
+      /* 星空背景 */
+      .stars {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background-image: radial-gradient(1.4px 1.4px at 20px 30px, rgba(255, 255, 255, 0.55), transparent),
+          radial-gradient(1px 1px at 120px 80px, rgba(255, 255, 255, 0.4), transparent),
+          radial-gradient(1.6px 1.6px at 220px 160px, rgba(255, 255, 255, 0.35), transparent),
+          radial-gradient(1px 1px at 320px 60px, rgba(255, 255, 255, 0.45), transparent),
+          radial-gradient(1.2px 1.2px at 60px 220px, rgba(255, 255, 255, 0.3), transparent),
+          radial-gradient(1px 1px at 400px 240px, rgba(255, 255, 255, 0.4), transparent);
+        background-size: 460px 320px;
+        opacity: 0.5;
+        animation: twinkle 6s ease-in-out infinite alternate;
+      }
+
+      @keyframes twinkle {
+        from {
+          opacity: 0.32;
+        }
+        to {
+          opacity: 0.6;
+        }
+      }
+
+      .app {
+        position: relative;
+        z-index: 1;
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 40px 24px 56px;
+      }
+
+      /* ===== 头部 ===== */
+      header {
+        text-align: center;
+        margin-bottom: 28px;
+      }
+
+      h1 {
+        font-size: 2.1rem;
+        letter-spacing: 2px;
+        background: linear-gradient(100deg, #ffe9b0 0%, var(--gold) 45%, #d79a2b 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        filter: drop-shadow(0 4px 18px rgba(246, 198, 91, 0.28));
+      }
+
+      .sub {
+        margin-top: 8px;
+        font-size: 0.86rem;
+        color: var(--muted);
+        letter-spacing: 1px;
+      }
+
+      /* ===== 进度条 ===== */
+      .progress-wrap {
+        position: relative;
+        height: 8px;
+        border-radius: 99px;
+        background: rgba(255, 255, 255, 0.07);
+        overflow: hidden;
+        margin-bottom: 34px;
+        border: 1px solid var(--border);
+      }
+
+      .progress-bar {
+        height: 100%;
+        width: 0%;
+        border-radius: 99px;
+        background: linear-gradient(90deg, #2f9e6e, var(--green) 40%, var(--gold) 100%);
+        box-shadow: 0 0 16px rgba(61, 220, 151, 0.45);
+        transition: width 0.65s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .progress-text {
+        position: absolute;
+        right: 0;
+        top: 16px;
+        font-size: 0.76rem;
+        color: var(--muted);
+        letter-spacing: 1px;
+      }
+
+      /* ===== 探险路线 ===== */
+      .trail {
+        position: relative;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 4px;
+        padding: 30px 0 10px;
+        margin-bottom: 30px;
+        flex-wrap: wrap;
+      }
+
+      .node {
+        position: relative;
+        flex: 1 1 0;
+        min-width: 92px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 9px;
+        text-align: center;
+      }
+
+      /* 节点之间的连线 */
+      .node::after {
+        content: "";
+        position: absolute;
+        top: 26px;
+        left: calc(50% + 30px);
+        right: calc(-50% + 30px);
+        height: 2px;
+        border-radius: 2px;
+        background: rgba(140, 165, 220, 0.14);
+        transition: background 0.5s;
+      }
+
+      .node:last-child::after {
+        display: none;
+      }
+
+      .node.done::after {
+        background: linear-gradient(90deg, rgba(61, 220, 151, 0.7), rgba(246, 198, 91, 0.5));
+      }
+
+      .dot {
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        font-size: 21px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1.5px solid rgba(140, 165, 220, 0.22);
+        transition: all 0.45s cubic-bezier(0.34, 1.4, 0.64, 1);
+        position: relative;
+        z-index: 2;
+      }
+
+      .node.done .dot {
+        background: linear-gradient(145deg, rgba(61, 220, 151, 0.22), rgba(61, 220, 151, 0.06));
+        border-color: rgba(61, 220, 151, 0.65);
+        box-shadow: 0 0 20px rgba(61, 220, 151, 0.3);
+      }
+
+      .node.active .dot {
+        background: linear-gradient(145deg, rgba(246, 198, 91, 0.3), rgba(246, 198, 91, 0.08));
+        border-color: var(--gold);
+        box-shadow: 0 0 30px rgba(246, 198, 91, 0.5);
+        transform: scale(1.14);
+        animation: pulse 1.5s ease-in-out infinite;
+      }
+
+      .node.failed .dot {
+        border-color: rgba(255, 107, 107, 0.75);
+        box-shadow: 0 0 20px rgba(255, 107, 107, 0.35);
+        animation: shake 0.45s ease-in-out;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          box-shadow: 0 0 22px rgba(246, 198, 91, 0.35);
+        }
+        50% {
+          box-shadow: 0 0 40px rgba(246, 198, 91, 0.7);
+        }
+      }
+
+      @keyframes shake {
+        0%,
+        100% {
+          transform: translateX(0);
+        }
+        25% {
+          transform: translateX(-5px);
+        }
+        75% {
+          transform: translateX(5px);
+        }
+      }
+
+      .label {
+        font-size: 0.76rem;
+        color: var(--muted);
+        letter-spacing: 0.5px;
+        transition: color 0.4s;
+      }
+
+      .node.active .label,
+      .node.done .label {
+        color: var(--text);
+      }
+
+      /* 探险家 */
+      .explorer {
+        position: absolute;
+        z-index: 3;
+        font-size: 20px;
+        transform: translate(-50%, -50%);
+        transition: left 0.75s cubic-bezier(0.45, 0, 0.25, 1), top 0.75s cubic-bezier(0.45, 0, 0.25, 1);
+        filter: drop-shadow(0 0 8px rgba(246, 198, 91, 0.8));
+        opacity: 0;
+      }
+
+      .explorer.show {
+        opacity: 1;
+      }
+
+      .explorer::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 34px;
+        height: 34px;
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(246, 198, 91, 0.28), transparent 70%);
+        z-index: -1;
+      }
+
+      /* ===== 当前场景卡片 ===== */
+      .stage {
+        display: flex;
+        align-items: center;
+        gap: 22px;
+        padding: 26px 28px;
+        border-radius: 18px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        backdrop-filter: blur(10px);
+        margin-bottom: 22px;
+        transition: border-color 0.5s, box-shadow 0.5s;
+        min-height: 118px;
+      }
+
+      .stage.active {
+        border-color: rgba(246, 198, 91, 0.4);
+        box-shadow: 0 0 40px rgba(246, 198, 91, 0.12) inset;
+      }
+
+      .stage.success {
+        border-color: rgba(61, 220, 151, 0.45);
+      }
+
+      .stage-icon {
+        width: 74px;
+        height: 74px;
+        flex: 0 0 74px;
+        border-radius: 18px;
+        display: grid;
+        place-items: center;
+        font-size: 34px;
+        background: linear-gradient(145deg, rgba(246, 198, 91, 0.16), rgba(246, 198, 91, 0.03));
+        border: 1px solid rgba(246, 198, 91, 0.22);
+        transition: transform 0.5s cubic-bezier(0.34, 1.5, 0.64, 1);
+      }
+
+      .stage.active .stage-icon {
+        animation: bob 1.7s ease-in-out infinite;
+      }
+
+      @keyframes bob {
+        0%,
+        100% {
+          transform: translateY(0) rotate(-2deg);
+        }
+        50% {
+          transform: translateY(-7px) rotate(2deg);
+        }
+      }
+
+      .stage-info h2 {
+        font-size: 1.15rem;
+        margin-bottom: 7px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+      }
+
+      .stage-info p {
+        font-size: 0.87rem;
+        color: var(--muted);
+        line-height: 1.65;
+      }
+
+      /* ===== 日志面板 ===== */
+      .log-panel {
+        border-radius: 16px;
+        background: rgba(10, 16, 30, 0.62);
+        border: 1px solid var(--border);
+        overflow: hidden;
+        margin-bottom: 24px;
+      }
+
+      .log-head {
+        padding: 12px 20px;
+        font-size: 0.78rem;
+        letter-spacing: 2px;
+        color: var(--muted);
+        border-bottom: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .log {
+        max-height: 228px;
+        overflow-y: auto;
+        padding: 14px 20px 18px;
+        font-family: "Cascadia Code", Consolas, "Courier New", monospace;
+        font-size: 0.8rem;
+        line-height: 1.9;
+      }
+
+      .log::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .log::-webkit-scrollbar-thumb {
+        background: rgba(140, 165, 220, 0.25);
+        border-radius: 99px;
+      }
+
+      .log-item {
+        display: flex;
+        gap: 10px;
+        opacity: 0;
+        transform: translateY(6px);
+        animation: fadeUp 0.4s ease forwards;
+      }
+
+      @keyframes fadeUp {
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .log-item .time {
+        color: rgba(139, 154, 184, 0.6);
+        flex: 0 0 auto;
+      }
+
+      .log-item.info .text {
+        color: #b9c6e0;
+      }
+      .log-item.success .text {
+        color: var(--green);
+      }
+      .log-item.warn .text {
+        color: var(--gold);
+      }
+      .log-item.error .text {
+        color: var(--red);
+      }
+
+      /* ===== 按钮 ===== */
+      .actions {
+        display: flex;
+        justify-content: center;
+        gap: 14px;
+      }
+
+      .btn {
+        border: none;
+        cursor: pointer;
+        padding: 13px 38px;
+        border-radius: 99px;
+        font-size: 0.95rem;
+        letter-spacing: 2px;
+        font-family: inherit;
+        transition: all 0.28s;
+      }
+
+      .btn.primary {
+        color: #1a1305;
+        font-weight: 700;
+        background: linear-gradient(100deg, #ffd97d, var(--gold));
+        box-shadow: 0 8px 26px rgba(246, 198, 91, 0.3);
+      }
+
+      .btn.primary:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 34px rgba(246, 198, 91, 0.45);
+      }
+
+      .btn.primary:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+        box-shadow: none;
+      }
+
+      .btn.ghost {
+        color: var(--muted);
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--border);
+      }
+
+      .btn.ghost:hover {
+        color: var(--text);
+        border-color: rgba(140, 165, 220, 0.4);
+      }
+
+      /* ===== 通关遮罩 ===== */
+      .victory {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        background: radial-gradient(circle at 50% 45%, rgba(246, 198, 91, 0.18), rgba(7, 11, 22, 0.94) 65%);
+        backdrop-filter: blur(4px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.6s;
+      }
+
+      .victory.show {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .victory .big {
+        font-size: 5rem;
+        animation: pop 0.9s cubic-bezier(0.34, 1.6, 0.64, 1);
+        filter: drop-shadow(0 0 40px rgba(246, 198, 91, 0.75));
+      }
+
+      @keyframes pop {
+        0% {
+          transform: scale(0.2) rotate(-25deg);
+          opacity: 0;
+        }
+        100% {
+          transform: scale(1) rotate(0);
+          opacity: 1;
+        }
+      }
+
+      .victory h2 {
+        font-size: 1.7rem;
+        background: linear-gradient(100deg, #ffe9b0, var(--gold));
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        letter-spacing: 3px;
+      }
+
+      .victory p {
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+
+      /* 金色粒子 */
+      .confetti {
+        position: absolute;
+        width: 8px;
+        height: 8px;
+        border-radius: 2px;
+        background: var(--gold);
+        opacity: 0;
+        animation: fall linear forwards;
+      }
+
+      @keyframes fall {
+        0% {
+          opacity: 1;
+          transform: translateY(0) rotate(0deg);
+        }
+        100% {
+          opacity: 0;
+          transform: translateY(70vh) rotate(540deg);
+        }
+      }
+
+      /* 响应式 */
+      @media (max-width: 720px) {
+        .app {
+          padding: 26px 16px 44px;
+        }
+        h1 {
+          font-size: 1.55rem;
+        }
+        .trail {
+          gap: 10px 0;
+        }
+        .node {
+          min-width: 73px;
+        }
+        .dot {
+          width: 44px;
+          height: 44px;
+          font-size: 18px;
+        }
+        .node::after {
+          top: 22px;
+          left: calc(50% + 25px);
+          right: calc(-50% + 25px);
+        }
+        .label {
+          font-size: 0.68rem;
+        }
+        .stage {
+          padding: 20px;
+          gap: 16px;
+        }
+        .stage-icon {
+          width: 58px;
+          height: 58px;
+          flex-basis: 58px;
+          font-size: 26px;
+        }
+        .stage-info h2 {
+          font-size: 1rem;
+        }
+        .btn {
+          padding: 12px 28px;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="stars"></div>
+
+    <main class="app">
+      <header>
+        <h1>🗺️ 寻 宝 游 戏</h1>
+        <p class="sub">JavaScript 异步编程 · async / await 动画演示</p>
+      </header>
+
+      <div class="progress-wrap">
+        <div class="progress-bar" id="progressBar"></div>
+        <span class="progress-text" id="progressText">0 / 7</span>
+      </div>
+
+      <section class="trail" id="trail">
+        <div class="explorer" id="explorer">🧭</div>
+      </section>
+
+      <section class="stage" id="stage">
+        <div class="stage-icon" id="stageIcon">🧭</div>
+        <div class="stage-info">
+          <h2 id="stageTitle">准备出发</h2>
+          <p id="stageDesc">点击下方「开始寻宝」，跟随探险家一起踏上旅程</p>
+        </div>
+      </section>
+
+      <section class="log-panel">
+        <div class="log-head">任 务 日 志</div>
+        <div class="log" id="log"></div>
+      </section>
+
+      <div class="actions">
+        <button class="btn primary" id="startBtn">开始寻宝</button>
+        <button class="btn ghost" id="resetBtn">重置</button>
+      </div>
+    </main>
+
+    <div class="victory" id="victory">
+      <div class="big">💎</div>
+      <h2>寻 宝 成 功</h2>
+      <p>传说中的宝藏，终于被你找到了</p>
+      <button class="btn ghost" id="againBtn">再来一次</button>
+    </div>
+
+    <script src="treasure-async.js"></script>
+    <script>
+      // ===== 阶段配置：与 treasure-async.js 中的 step id 一一对应 =====
+      const STAGES = [
+        { id: "library", icon: "📚", name: "古老的图书馆", desc: "在落满灰尘的书架间寻找第一个线索" },
+        { id: "decode", icon: "📜", name: "解码古老文字", desc: "破译羊皮卷上失传已久的密文（可能多次失败）" },
+        { id: "forest", icon: "🌲", name: "迷雾森林", desc: "穿越浓雾弥漫的森林，小心迷失方向" },
+        { id: "river", icon: "🌊", name: "湍急河流", desc: "乘一叶小舟渡过咆哮的急流" },
+        { id: "door", icon: "🗿", name: "神秘石门", desc: "破解石门上古老的机关谜题（可能多次失败）" },
+        { id: "temple", icon: "🏛️", name: "古老神庙", desc: "在残垣断壁间搜寻神秘的宝箱" },
+        { id: "chest", icon: "💎", name: "神秘宝箱", desc: "尘封千年的宝箱缓缓开启" },
+      ];
+
+      const trailEl = document.getElementById("trail");
+      const explorerEl = document.getElementById("explorer");
+      const progressBar = document.getElementById("progressBar");
+      const progressText = document.getElementById("progressText");
+      const stageEl = document.getElementById("stage");
+      const stageIcon = document.getElementById("stageIcon");
+      const stageTitle = document.getElementById("stageTitle");
+      const stageDesc = document.getElementById("stageDesc");
+      const logEl = document.getElementById("log");
+      const startBtn = document.getElementById("startBtn");
+      const resetBtn = document.getElementById("resetBtn");
+      const victoryEl = document.getElementById("victory");
+      const againBtn = document.getElementById("againBtn");
+
+      let running = false;
+
+      // ===== 初始化节点 =====
+      STAGES.forEach((s) => {
+        const node = document.createElement("div");
+        node.className = "node";
+        node.dataset.id = s.id;
+        node.innerHTML = `<div class="dot">${s.icon}</div><div class="label">${s.name}</div>`;
+        trailEl.appendChild(node);
+      });
+
+      const nodeMap = {};
+      STAGES.forEach((s) => {
+        nodeMap[s.id] = trailEl.querySelector(`.node[data-id="${s.id}"]`);
+      });
+
+      // ===== 探险家移动到指定节点 =====
+      function moveExplorer(id) {
+        const node = nodeMap[id];
+        if (!node) return;
+        const wrap = trailEl.getBoundingClientRect();
+        const dot = node.querySelector(".dot").getBoundingClientRect();
+        explorerEl.style.left = dot.left - wrap.left + dot.width / 2 + "px";
+        explorerEl.style.top = dot.top - wrap.top - 14 + "px";
+        explorerEl.classList.add("show");
+      }
+
+      // ===== 日志 =====
+      function addLog(text, type = "info") {
+        const now = new Date();
+        const time = [now.getHours(), now.getMinutes(), now.getSeconds()]
+          .map((n) => String(n).padStart(2, "0"))
+          .join(":");
+        const item = document.createElement("div");
+        item.className = "log-item " + type;
+        item.innerHTML = `<span class="time">${time}</span><span class="text"></span>`;
+        item.querySelector(".text").textContent = text;
+        logEl.appendChild(item);
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      // ===== 更新场景卡片 =====
+      function setStage(stage, state) {
+        stageIcon.textContent = stage.icon;
+        stageTitle.textContent = stage.name;
+        stageDesc.textContent = stage.desc;
+        stageEl.className = "stage " + (state || "");
+      }
+
+      // ===== 进度 =====
+      let doneCount = 0;
+      function updateProgress() {
+        const pct = (doneCount / STAGES.length) * 100;
+        progressBar.style.width = pct + "%";
+        progressText.textContent = `${doneCount} / ${STAGES.length}`;
+      }
+
+      // ===== 重置 =====
+      function reset() {
+        running = false;
+        doneCount = 0;
+        logEl.innerHTML = "";
+        explorerEl.classList.remove("show");
+        victoryEl.classList.remove("show");
+        Object.values(nodeMap).forEach((n) => (n.className = "node"));
+        setStage({ icon: "🧭", name: "准备出发", desc: "点击下方「开始寻宝」，跟随探险家一起踏上旅程" }, "");
+        startBtn.disabled = false;
+        startBtn.textContent = "开始寻宝";
+        updateProgress();
+      }
+
+      // ===== 粒子效果 =====
+      function confetti() {
+        for (let i = 0; i < 60; i++) {
+          const p = document.createElement("div");
+          p.className = "confetti";
+          p.style.left = Math.random() * 100 + "%";
+          p.style.top = Math.random() * 20 + "%";
+          p.style.animationDuration = 1.4 + Math.random() * 1.6 + "s";
+          p.style.animationDelay = Math.random() * 0.5 + "s";
+          const colors = ["#f6c65b", "#ffe9b0", "#3ddc97", "#ffd97d"];
+          p.style.background = colors[Math.floor(Math.random() * colors.length)];
+          victoryEl.appendChild(p);
+          setTimeout(() => p.remove(), 3600);
+        }
+      }
+
+      // ===== 开始寻宝 =====
+      async function startHunt() {
+        if (running) return;
+        reset();
+        running = true;
+        startBtn.disabled = true;
+        startBtn.textContent = "寻宝进行中…";
+
+        addLog("探险正式开始，async/await 流程已启动", "info");
+
+        try {
+          await TreasureHunt.runTreasureHunt((e) => {
+            if (e.type === "step-start") {
+              const idx = STAGES.findIndex((s) => s.id === e.id);
+              // 之前的节点标记完成
+              STAGES.slice(0, idx).forEach((s) => {
+                nodeMap[s.id].classList.remove("active");
+                nodeMap[s.id].classList.add("done");
+              });
+              const node = nodeMap[e.id];
+              node.classList.remove("failed");
+              node.classList.add("active");
+              moveExplorer(e.id);
+              setStage(
+                { icon: node.querySelector(".dot").textContent, name: e.name, desc: e.desc },
+                "active"
+              );
+            } else if (e.type === "step-success") {
+              const node = nodeMap[e.id];
+              if (node) {
+                node.classList.remove("active");
+                node.classList.add("done");
+              }
+              addLog(e.message, "success");
+              doneCount = Math.max(doneCount, STAGES.findIndex((s) => s.id === e.id) + 1);
+              updateProgress();
+              stageEl.className = "stage success";
+            } else if (e.type === "step-retry") {
+              const node = nodeMap[e.id];
+              if (node) {
+                node.classList.add("failed");
+                setTimeout(() => node.classList.remove("failed"), 500);
+              }
+              addLog("⚠ " + e.message, "warn");
+            } else if (e.type === "complete") {
+              addLog(e.message, "success");
+              stageEl.classList.remove("active");
+              victoryEl.classList.add("show");
+              confetti();
+            } else if (e.type === "abort") {
+              addLog(e.message, "error");
+              stageEl.className = "stage";
+            }
+          });
+        } catch (err) {
+          // runTreasureHunt 内部已通过 abort 事件输出日志
+        }
+
+        running = false;
+        startBtn.disabled = false;
+        startBtn.textContent = "再寻一次";
+      }
+
+      startBtn.addEventListener("click", startHunt);
+      resetBtn.addEventListener("click", reset);
+      againBtn.addEventListener("click", () => {
+        victoryEl.classList.remove("show");
+        startHunt();
+      });
+
+      // 窗口尺寸变化时重新定位探险家
+      window.addEventListener("resize", () => {
+        const act = trailEl.querySelector(".node.active");
+        if (act) moveExplorer(act.dataset.id);
+      });
+
+      updateProgress();
+    </script>
+  </body>
+</html>
